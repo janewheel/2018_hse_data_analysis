@@ -1,0 +1,71 @@
+---
+title: "hw2_janewheel"
+author: Колесникова Женя
+date: февраль 2018
+output:
+  html_document: default
+---
+### 1.1
+результаты биномиального теста
+``` {r}
+library(tidyverse)
+library(mosaic)
+hw <- read_csv("https://raw.githubusercontent.com/agricolamz/2018_data_analysis_for_linguists/master/data/students/janewheel/hw2_binomial/hw2_binomial.csv", col_names = TRUE)
+hw <- as_tibble(hw)
+binomial_test <- binom.test(x = hw$k, n = hw$n, p = hw$prior)
+binomial_test
+```
+
+### 1.2
+результаты симуляции
+```{r}
+set.seed(42)
+do(1000)*
+  sum(sample(x = 1:0, 
+             size = hw$n, 
+             prob = c(hw$prior, (1-hw$prior)), 
+             replace = TRUE)) -> 
+  simulations
+simulations %>% 
+  mutate(greater = sum >= hw$k) %>% 
+  count(greater)
+```
+
+### 1.3
+среднее апостериорного распределения
+``` {r}
+alpha_prior <- hw$prior*hw$n
+beta_prior <- (1-hw$prior)*hw$n
+alpha_data <- hw$k 
+beta_data <- hw$n - hw$k
+alpha_post <- alpha_prior + alpha_data
+beta_post <- beta_prior + beta_data
+x <- seq(0, 1, length = 100)
+data_frame(p = rep(x, 3),
+           density = c(dbeta(x, alpha_prior, beta_prior),
+                       dbeta(x, alpha_data, beta_data),
+                       dbeta(x, alpha_post, beta_post)),
+           type = rep(c("prior", "likelihood", "posterior"), each = 100))%>% 
+  ggplot(aes(x = p, y = density, color = type))+
+  geom_line()+
+  theme_bw()
+```
+
+### 1.4
+среднее апостериорного распределения, используя неинформативное априорное распределение
+``` {r}
+x <- seq(0, 1, length = 100)
+data_frame(p = rep(x, 3),
+           density = c(dbeta(x, 1, 1),
+                       dbeta(x, alpha_data, beta_data),
+                       dbeta(x, alpha_data + 1, beta_data + 1)),
+           type = rep(c("prior", "likelihood", "posterior"), each = 100))%>% 
+  ggplot(aes(x = p, y = density, color = type))+
+  geom_line()+
+  theme_bw()
+```
+
+### 1.5
+результаты
+
+Извините, у меня почему-то сейчас не работает библиотека tidyverse, хотя, когда выполняла дз, все было хорошо - сегодня хотела дописать 1.5 задание, запустила код и все сломалось :( . Пока загружу так, а как разберусь в причине, если успею, доделаю.
