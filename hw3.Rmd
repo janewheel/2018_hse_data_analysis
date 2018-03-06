@@ -1,0 +1,126 @@
+---
+title: "hw3_janewheel"
+author: Колесникова Женя
+date: март 2018
+output:
+  html_document: default
+---
+
+### 1.1
+среднее употребление слова “сэр” по каждой главе и grand mean
+``` {r}
+library(tidyverse)
+library(bootstrap)
+library(mosaic)
+hw <- read_csv("https://raw.githubusercontent.com/agricolamz/2018_data_analysis_for_linguists/master/data/students/janewheel/hw3_binomial_ci/hw3_wodehouse.csv")
+hw <- as_tibble(hw)
+
+hw %>% 
+  filter(word == "сэр") %>% 
+  count(chapter) ->
+  chapter_av
+
+hw %>%
+  group_by(chapter) %>% 
+  count(chapter) ->
+  total
+
+chapter_av['total'] <- total$n
+
+chapter_av %>%
+  mutate(average = n/total) %>% 
+  arrange(desc(average)) %>% 
+  summarise(g_mean = mean(average)) ->
+  grand_mean
+as_tibble(grand_mean)
+```
+
+### 1.2
+доверительный интервал для средней доли слова “сэр” бутстрэпом
+``` {r}
+set.seed(42)
+chapter_av %>%
+  mutate(average = n/total) %>% 
+  arrange(desc(average)) ->
+  chapter_av
+
+chapter_bs <- bootstrap(chapter_av$average, nboot = 10000, theta = mean)$thetastar
+chapter_bs <- data_frame(means = chapter_bs) 
+
+chapter_bs %>%
+  summarise(mean = mean(means),
+            q1 = quantile(means, 0.025),
+            q2 = quantile(means, 0.975))->
+  chapter_stats
+as_tibble(chapter_stats[,-1])
+```
+
+### 1.3
+биномиальный доверительный интервал употребления слова “сэр” в каждой главе (max)
+``` {r}
+chapter_av %>%
+  group_by(chapter) %>%
+  mutate(low_ci = binom.test(x = n, n = total, ci.method = "Clopper-Pearson")$conf.int[1],
+         up_ci = binom.test(x = n, n = total, ci.method = "Clopper-Pearson")$conf.int[2]) ->
+  chapter_av
+chapter_av %>%
+  ggplot(aes(chapter, average))+
+  geom_point()+
+  geom_pointrange(aes(ymin = low_ci, ymax = up_ci))+
+  theme_bw()+
+  coord_flip()+
+  labs(title = 'Среднее и 95% CI употребления "сэр" в рассказах А. Чехова',
+       x = "", y = "")
+chapter_av %>%
+  arrange(total) %>% 
+  mutate (length = up_ci - low_ci) ->
+  chapter_av
+as_tibble(chapter_av[which.max(chapter_av$length),-7])
+```
+
+###1.4
+байесовский биномиальный доверительный интервал употребления слова “сэр” в каждой главе (max)
+```{r}
+mu <- mean(chapter_av$average)
+var <- var(chapter_av$average)
+alpha0 <- ((1 - mu) / var - 1 / mu) * mu ^ 2
+beta0 <- alpha0 * (1 / mu - 1)
+alpha0
+
+chapter_av %>%
+  mutate(alpha_post = n+alpha0,
+         beta_post = total-n+beta0,
+         average_post = alpha_post/(alpha_post+beta_post),
+         cred_int_l = qbeta(.025, alpha_post, beta_post),
+         cred_int_h = qbeta(.975, alpha_post, beta_post)) ->
+  posterior
+
+posterior %>% 
+  select(chapter, total, average, average_post) %>% 
+  arrange(total) %>% 
+  mutate (length = posterior$cred_int_h - posterior$cred_int_l) ->
+  posterior
+posterior %>% 
+  ggplot(aes(chapter, average_post, ymin = cred_int_l, ymax = cred_int_h))+
+  geom_pointrange()+
+  coord_flip()+
+  theme_bw()
+as_tibble(posterior[which.max(posterior$length),-5])
+```
+
+###1.5
+биномиальный доверительный интервал употребления слова “сэр” в каждой главе (min)
+```{r}
+as_tibble(chapter_av[which.min(chapter_av$length),-7])
+```
+
+###1.6
+байесовский биномиальный доверительный интервал употребления слова “сэр” в каждой главе (min)
+```{r}
+as_tibble(posterior[which.min(posterior$length),-5])
+```
+
+###1.7
+результаты
+
+Согласно результатам подсчетов чаще всего слово "сэр" встречается в главе 14: 77 раз, и реже всего — в главе 6: 1 раз, при этом количество слов в главах вырьируется от 2117 до 7244. Grand mean составляет 0.005624023, а размер интервала для средней доли слова “сэр” в главах романа (10000 бутстрэп-подвыборок) — 0.005621472. На основе полученных данных возможно утверждать, что бутстрэп-подвыборки получились сбалансированными, так как значения Grand mean и интервала для средней доли слова достаточно близки.
